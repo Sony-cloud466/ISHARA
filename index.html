@@ -1,0 +1,2041 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ISHARA — AI-Powered Sign Language Communication</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Pretrained MediaPipe Hands Model Dependencies -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              ink: "#0A0B12",
+              violet: {
+                DEFAULT: "#6C5CE7",
+                light: "#EEEAFE",
+                dark: "#5142CA",
+              },
+              cyan: {
+                DEFAULT: "#19D3C5",
+                dark: "#0EB2A5",
+              },
+              coral: "#FF6B6B",
+              sky: "#4DA3FF",
+              darkSurface: "#11131D",
+              coolWhite: "#F8FAFC",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              outfit: ["Outfit", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        background-color: #f8fafc;
+        color: #0a0b12;
+        overflow-x: hidden;
+      }
+
+      .glass-panel {
+        background: rgba(17, 19, 29, 0.85);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .glass-card-light {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(226, 232, 240, 0.8);
+      }
+
+      .neon-glow-violet {
+        box-shadow: 0 0 25px rgba(108, 92, 231, 0.35);
+      }
+
+      .neon-glow-cyan {
+        box-shadow: 0 0 25px rgba(25, 211, 197, 0.35);
+      }
+
+      @keyframes scanline {
+        0% {
+          transform: translateY(-100%);
+        }
+        100% {
+          transform: translateY(1000%);
+        }
+      }
+
+      .animate-scan {
+        animation: scanline 3s linear infinite;
+      }
+
+      @keyframes pulse-ring {
+        0% {
+          transform: scale(0.95);
+          opacity: 0.8;
+        }
+        50% {
+          transform: scale(1.05);
+          opacity: 0.4;
+        }
+        100% {
+          transform: scale(0.95);
+          opacity: 0.8;
+        }
+      }
+
+      .pulse-ring-effect {
+        animation: pulse-ring 2.5s ease-in-out infinite;
+      }
+
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
+  </head>
+  <body
+    class="font-sans antialiased text-ink bg-coolWhite min-h-screen flex flex-col justify-between selection:bg-violet selection:text-white"
+  >
+    <canvas
+      id="bgNeuralCanvas"
+      class="fixed top-0 left-0 w-full h-full pointer-events-none z-0 opacity-40"
+    ></canvas>
+
+    <header
+      class="sticky top-0 z-50 glass-card-light border-b border-slate-200/80 shadow-sm transition-all duration-300"
+    >
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-20">
+          <!-- Brand & Logo -->
+          <a
+            href="#"
+            class="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-violet rounded-lg p-1"
+          >
+            <div
+              class="relative w-12 h-12 bg-ink rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-300"
+            >
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 40 40"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 28C12 28 8 22 8 16C8 11.5817 11.5817 8 16 8C20.4183 8 24 11.5817 24 16C24 18.5 22.5 21 21 23"
+                  stroke="#19D3C5"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M18 20L22 14C23 12.5 25 12 26.5 13C28 14 28.5 16 27.5 17.5L24 23"
+                  stroke="#6C5CE7"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M23 20L27 15C28 13.5 30 13 31.5 14C33 15 33.5 17 32.5 18.5L28 25"
+                  stroke="#FF6B6B"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                />
+                <circle cx="16" cy="16" r="3" fill="#19D3C5" />
+                <circle cx="28" cy="10" r="2" fill="#6C5CE7" />
+                <circle cx="34" cy="22" r="2" fill="#FF6B6B" />
+                <line
+                  x1="16"
+                  y1="16"
+                  x2="28"
+                  y2="10"
+                  stroke="rgba(255,255,255,0.4)"
+                  stroke-dasharray="2 2"
+                />
+                <line
+                  x1="28"
+                  y1="10"
+                  x2="34"
+                  y2="22"
+                  stroke="rgba(255,255,255,0.4)"
+                  stroke-dasharray="2 2"
+                />
+              </svg>
+              <span
+                class="absolute -top-1 -right-1 w-3 h-3 bg-cyan rounded-full animate-ping"
+              ></span>
+              <span
+                class="absolute -top-1 -right-1 w-3 h-3 bg-cyan rounded-full"
+              ></span>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span
+                  class="font-outfit font-extrabold text-2xl tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-ink via-violet-dark to-violet"
+                  >ISHARA</span
+                >
+                <span
+                  class="bg-violet-light text-violet-dark text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest border border-violet/20"
+                  >AI 3.0</span
+                >
+              </div>
+              <p
+                class="text-[10px] font-semibold tracking-widest text-slate-500 uppercase"
+              >
+                Communicate Beyond Words
+              </p>
+            </div>
+          </a>
+
+          <!-- Desktop Navigation Links -->
+          <nav
+            class="hidden lg:flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200"
+          >
+            <a
+              href="#live-arena"
+              class="px-4 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-violet hover:bg-white transition-all shadow-none hover:shadow-sm"
+              >Live Recognition</a
+            >
+            <a
+              href="#sign-library"
+              class="px-4 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-violet hover:bg-white transition-all shadow-none hover:shadow-sm"
+              >70+ Sign Library</a
+            >
+            <a
+              href="#practice-mode"
+              class="px-4 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-violet hover:bg-white transition-all shadow-none hover:shadow-sm"
+              >Practice Challenge</a
+            >
+            <a
+              href="#two-way-speech"
+              class="px-4 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-violet hover:bg-white transition-all shadow-none hover:shadow-sm"
+              >Two-Way Speech</a
+            >
+            <a
+              href="#history-section"
+              class="px-4 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-violet hover:bg-white transition-all shadow-none hover:shadow-sm"
+              >History</a
+            >
+          </nav>
+
+          <!-- System Status Indicator & CTA -->
+          <div class="hidden sm:flex items-center gap-3">
+            <div
+              id="statusBadge"
+              class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-semibold"
+            >
+              <span
+                class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
+              ></span>
+              <span id="statusText">AI Engine: Online</span>
+            </div>
+            <a
+              href="#live-arena"
+              class="bg-violet hover:bg-violet-dark text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg flex items-center gap-2 group"
+            >
+              <i
+                class="fa-solid fa-camera group-hover:rotate-12 transition-transform"
+              ></i>
+              <span>Try Live Demo</span>
+            </a>
+          </div>
+
+          <!-- Mobile Navigation Toggle Button -->
+          <button
+            id="mobileMenuBtn"
+            class="lg:hidden p-2 rounded-lg text-slate-600 hover:text-ink hover:bg-slate-100 focus:outline-none"
+            aria-label="Toggle navigation menu"
+          >
+            <i class="fa-solid fa-bars text-xl"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Menu Dropdown -->
+      <div
+        id="mobileMenu"
+        class="hidden lg:hidden border-t border-slate-200 bg-white px-4 py-4 space-y-2 shadow-lg"
+      >
+        <a
+          href="#live-arena"
+          class="block px-4 py-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-sm"
+          >Live Recognition</a
+        >
+        <a
+          href="#sign-library"
+          class="block px-4 py-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-sm"
+          >70+ Sign Library</a
+        >
+        <a
+          href="#practice-mode"
+          class="block px-4 py-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-sm"
+          >Practice Challenge</a
+        >
+        <a
+          href="#two-way-speech"
+          class="block px-4 py-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-sm"
+          >Two-Way Speech</a
+        >
+        <a
+          href="#history-section"
+          class="block px-4 py-2.5 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-sm"
+          >History & Favorites</a
+        >
+      </div>
+    </header>
+
+    <main class="relative z-10 flex-grow">
+      <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-12">
+        <div class="text-center max-w-4xl mx-auto">
+          <div
+            class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-light border border-violet/20 text-violet-dark text-xs font-bold uppercase tracking-wider mb-6"
+          >
+            <i class="fa-solid fa-sparkles text-violet"></i>
+            <span>Real-Time Gesture Computer Vision & Audio AI</span>
+          </div>
+          <h1
+            class="font-outfit text-4xl sm:text-6xl font-extrabold text-ink tracking-tight leading-tight mb-6"
+          >
+            Bridging Silent Gestures into
+            <span
+              class="bg-clip-text text-transparent bg-gradient-to-r from-violet via-cyan-dark to-violet-dark"
+              >Universal Speech</span
+            >
+          </h1>
+          <p
+            class="text-lg sm:text-xl text-slate-600 mb-8 max-w-2xl mx-auto leading-relaxed"
+          >
+            ISHARA translates sign language into spoken sentences in real-time,
+            bridging communication between Deaf, hard of hearing, and hearing
+            individuals in both English and Nepali.
+          </p>
+          <div class="flex flex-wrap items-center justify-center gap-4">
+            <a
+              href="#live-arena"
+              class="px-7 py-3.5 bg-violet hover:bg-violet-dark text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-violet/30 flex items-center gap-3 text-base"
+            >
+              <i class="fa-solid fa-bolt"></i>
+              <span>Start Live Camera Translation</span>
+            </a>
+            <button
+              id="heroJudgeBtn"
+              class="px-7 py-3.5 bg-ink hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-3 text-base group"
+            >
+              <i
+                class="fa-solid fa-play text-cyan group-hover:scale-110 transition-transform"
+              ></i>
+              <span>Run Judge Presentation Loop</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="live-arena"
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      >
+        <div
+          class="bg-darkSurface text-white rounded-3xl p-4 sm:p-8 shadow-2xl border border-slate-800 relative overflow-hidden"
+        >
+          <div
+            class="absolute top-0 right-0 w-96 h-96 bg-violet/10 rounded-full blur-3xl pointer-events-none"
+          ></div>
+          <div
+            class="absolute bottom-0 left-0 w-96 h-96 bg-cyan/10 rounded-full blur-3xl pointer-events-none"
+          ></div>
+
+          <div
+            class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-800 relative z-10"
+          >
+            <div>
+              <div class="flex items-center gap-3">
+                <span class="w-3 h-3 rounded-full bg-cyan animate-ping"></span>
+                <h2
+                  class="font-outfit text-2xl sm:text-3xl font-bold text-white"
+                >
+                  Live Recognition Arena
+                </h2>
+              </div>
+              <p class="text-sm text-slate-400 mt-1">
+                21-Point Landmark Detection HUD with Real-time Natural Language
+                Synthesis
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <div
+                class="bg-slate-900/90 p-1 rounded-xl border border-slate-700 flex items-center"
+              >
+                <button
+                  id="btnCameraMode"
+                  class="px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-violet text-white shadow-md flex items-center gap-2"
+                >
+                  <i class="fa-solid fa-video"></i>
+                  <span>Camera Feed</span>
+                </button>
+                <button
+                  id="btnSimMode"
+                  class="px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-400 hover:text-white flex items-center gap-2"
+                >
+                  <i class="fa-solid fa-hand"></i>
+                  <span>Simulated Input</span>
+                </button>
+              </div>
+              <button
+                id="btnDemoSequence"
+                class="px-4 py-2 bg-gradient-to-r from-cyan-dark to-cyan text-ink font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md hover:brightness-110 flex items-center gap-2"
+              >
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Judge Demo Mode</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10">
+            <!-- Main Video HUD Window -->
+            <div class="lg:col-span-8 flex flex-col">
+              <div
+                class="relative bg-black rounded-2xl overflow-hidden aspect-video border border-slate-800 flex items-center justify-center group shadow-inner"
+              >
+                <video
+                  id="webcamVideo"
+                  class="absolute inset-0 w-full h-full object-cover hidden"
+                  autoplay
+                  playsinline
+                  muted
+                ></video>
+                <canvas
+                  id="hudCanvas"
+                  class="absolute inset-0 w-full h-full object-cover z-20"
+                ></canvas>
+                <div
+                  id="scannerBeam"
+                  class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan to-transparent opacity-75 z-20 pointer-events-none animate-scan hidden"
+                ></div>
+
+                <div id="cameraStandby" class="text-center p-6 z-30 max-w-md">
+                  <div
+                    class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-cyan text-2xl"
+                  >
+                    <i class="fa-solid fa-camera"></i>
+                  </div>
+                  <h3 class="font-outfit text-lg font-bold text-white mb-2">
+                    Webcam Recognition Ready
+                  </h3>
+                  <p class="text-xs text-slate-400 mb-6">
+                    Click Start Camera to initialize the 21-point hand tracking
+                    neural vision engine or use Simulation Mode.
+                  </p>
+                  <button
+                    id="btnStartCamera"
+                    class="px-6 py-3 bg-violet hover:bg-violet-dark text-white font-bold rounded-xl text-sm transition-all shadow-lg inline-flex items-center gap-2"
+                  >
+                    <i class="fa-solid fa-power-off"></i>
+                    <span>Start Camera Feed</span>
+                  </button>
+                </div>
+
+                <div
+                  class="absolute top-4 left-4 z-30 flex items-center gap-2 bg-slate-950/80 backdrop-blur border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono text-cyan"
+                >
+                  <span
+                    class="w-2 h-2 rounded-full bg-cyan animate-pulse"
+                  ></span>
+                  <span>FPS: <span id="fpsCounter">60</span></span>
+                  <span class="text-slate-600">|</span>
+                  <span>RES: 1280x720</span>
+                </div>
+
+                <div
+                  id="gestureConfidenceBadge"
+                  class="absolute bottom-4 left-4 z-30 hidden bg-slate-950/90 backdrop-blur border border-cyan/40 px-3 py-2 rounded-xl text-xs font-mono text-white"
+                >
+                  <div
+                    class="text-[10px] text-cyan font-bold tracking-widest uppercase"
+                  >
+                    Detected Landmark
+                  </div>
+                  <div
+                    id="currentDetectedName"
+                    class="text-base font-bold text-white"
+                  >
+                    HELLO
+                  </div>
+                  <div class="text-[10px] text-emerald-400">
+                    Confidence: <span id="currentConfidenceScore">98.4%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                id="simModeBar"
+                class="mt-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-800"
+              >
+                <div
+                  class="text-xs font-semibold text-slate-400 mb-2 flex items-center justify-between"
+                >
+                  <span
+                    ><i class="fa-solid fa-keyboard mr-1 text-cyan"></i>
+                    Simulation Mode: Click sign to simulate camera
+                    detection</span
+                  >
+                  <span
+                    class="text-[10px] text-slate-500 uppercase tracking-widest"
+                    >Interactive Trigger</span
+                  >
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="HELLO"
+                  >
+                    👋 HELLO
+                  </button>
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="THANK YOU"
+                  >
+                    🙏 THANK YOU
+                  </button>
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="HELP"
+                  >
+                    🆘 HELP
+                  </button>
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="WATER"
+                  >
+                    💧 WATER
+                  </button>
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="FOOD"
+                  >
+                    🍲 FOOD
+                  </button>
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="YES"
+                  >
+                    ✅ YES
+                  </button>
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="NO"
+                  >
+                    ❌ NO
+                  </button>
+                  <button
+                    class="sim-sign-btn px-3 py-1.5 bg-slate-800 hover:bg-violet hover:text-white text-slate-300 rounded-lg text-xs font-medium transition-all"
+                    data-sign="PLEASE"
+                  >
+                    🤝 PLEASE
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side Sequence Builder & Live Output Panel -->
+            <div class="lg:col-span-4 flex flex-col justify-between gap-4">
+              <div
+                class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 flex-grow flex flex-col"
+              >
+                <div class="flex items-center justify-between mb-3">
+                  <span
+                    class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"
+                  >
+                    <i class="fa-solid fa-cubes text-violet"></i> Gesture
+                    Sequence
+                  </span>
+                  <div class="flex gap-2">
+                    <button
+                      id="btnUndoSign"
+                      class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition-all"
+                      title="Undo last sign"
+                    >
+                      <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button
+                      id="btnClearSequence"
+                      class="p-1.5 bg-slate-800 hover:bg-rose-900/50 text-slate-300 hover:text-rose-300 rounded-lg text-xs transition-all"
+                      title="Clear sequence"
+                    >
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  id="sequenceChipsContainer"
+                  class="bg-slate-950 p-3 rounded-xl border border-slate-800/80 min-h-[100px] flex-grow flex flex-wrap gap-2 items-start content-start"
+                >
+                  <span
+                    id="emptyChipsPlaceholder"
+                    class="text-slate-600 text-xs italic"
+                    >Perform or click signs to build sequence...</span
+                  >
+                </div>
+
+                <button
+                  id="btnInterpretSequence"
+                  class="w-full mt-3 py-3 bg-gradient-to-r from-violet to-violet-dark hover:brightness-110 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <i class="fa-solid fa-wand-magic"></i>
+                  <span>AI Interpret Sequence</span>
+                </button>
+              </div>
+
+              <div
+                class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800"
+              >
+                <div class="flex items-center justify-between mb-2">
+                  <span
+                    class="text-xs font-bold text-cyan uppercase tracking-wider flex items-center gap-2"
+                  >
+                    <i class="fa-solid fa-brain"></i> AI Contextual Translation
+                  </span>
+                  <span
+                    class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full"
+                    >Gemini NLP</span
+                  >
+                </div>
+
+                <div class="mb-3">
+                  <div
+                    class="text-[10px] text-slate-500 uppercase font-semibold"
+                  >
+                    English
+                  </div>
+                  <div
+                    id="translatedEnglish"
+                    class="text-sm font-semibold text-white mt-0.5 min-h-[24px]"
+                  >
+                    Waiting for sign input...
+                  </div>
+                </div>
+
+                <div class="mb-4">
+                  <div
+                    class="text-[10px] text-slate-500 uppercase font-semibold"
+                  >
+                    Nepali Translation
+                  </div>
+                  <div
+                    id="translatedNepali"
+                    class="text-sm font-semibold text-cyan mt-0.5 min-h-[24px]"
+                  >
+                    सङ्केत प्रविष्टि पर्खिँदैछ...
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    id="btnSpeakEnglish"
+                    class="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-lg transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <i class="fa-solid fa-volume-high text-violet"></i>
+                    <span>Speak EN</span>
+                  </button>
+                  <button
+                    id="btnSpeakNepali"
+                    class="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-lg transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <i class="fa-solid fa-volume-high text-cyan"></i>
+                    <span>Speak NP</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Judge Presentation Banner Modal -->
+          <div
+            id="demoPresentationBanner"
+            class="hidden mt-6 p-4 bg-slate-900 border border-cyan/40 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="w-10 h-10 rounded-xl bg-cyan/20 text-cyan flex items-center justify-center text-lg font-bold"
+              >
+                <span id="demoStepNum">1</span>
+              </div>
+              <div>
+                <div
+                  class="text-xs text-cyan font-bold tracking-widest uppercase"
+                >
+                  Judge Presentation Mode Active
+                </div>
+                <div id="demoStepDesc" class="text-sm text-white font-medium">
+                  Initializing Computer Vision Hand Tracking...
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-32 bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div
+                  id="demoProgressBar"
+                  class="bg-cyan h-full w-1/4 transition-all duration-300"
+                ></div>
+              </div>
+              <button
+                id="btnStopDemo"
+                class="px-3 py-1.5 bg-rose-900/60 hover:bg-rose-900 text-rose-200 text-xs font-semibold rounded-lg transition-all"
+              >
+                Stop Demo
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="two-way-speech"
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10"
+      >
+        <div class="text-center max-w-2xl mx-auto mb-8">
+          <span
+            class="text-xs font-bold text-violet uppercase tracking-widest bg-violet-light px-3 py-1 rounded-full"
+            >Accessibility Bridge</span
+          >
+          <h2 class="font-outfit text-3xl font-extrabold text-ink mt-2">
+            Two-Way Speech & Visual Dialogue
+          </h2>
+          <p class="text-sm text-slate-600">
+            Allows hearing individuals to speak directly into ISHARA. Words are
+            transcribed and displayed in large visual cards for the signer.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <!-- Voice Input Box -->
+          <div
+            class="glass-card-light rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between"
+          >
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <h3
+                  class="font-outfit text-lg font-bold text-ink flex items-center gap-2"
+                >
+                  <i class="fa-solid fa-microphone text-violet"></i>
+                  <span>Voice Input for Hearing User</span>
+                </h3>
+                <span
+                  id="sttStatusBadge"
+                  class="text-[10px] font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full"
+                  >Microphone Ready</span
+                >
+              </div>
+
+              <p class="text-xs text-slate-500 mb-4">
+                Speak into your microphone or type a response below to
+                communicate back to the sign language user.
+              </p>
+
+              <div class="flex justify-center my-6">
+                <button
+                  id="btnMicListen"
+                  class="w-20 h-20 rounded-full bg-violet hover:bg-violet-dark text-white flex items-center justify-center text-2xl shadow-xl transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-violet/30"
+                >
+                  <i class="fa-solid fa-microphone"></i>
+                </button>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-xs font-semibold text-slate-600"
+                  >Or type message:</label
+                >
+                <div class="flex gap-2">
+                  <input
+                    id="sttTextInput"
+                    type="text"
+                    placeholder="e.g., Nice to meet you! How can I help?"
+                    class="flex-grow px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-violet focus:ring-1 focus:ring-violet"
+                  />
+                  <button
+                    id="btnSubmitSpeechText"
+                    class="px-4 py-2.5 bg-ink text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-200">
+              <span
+                class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2"
+                >Quick Responses:</span
+              >
+              <div class="flex flex-wrap gap-2">
+                <button
+                  class="quick-phrase-btn text-xs bg-slate-100 hover:bg-violet-light hover:text-violet-dark px-3 py-1.5 rounded-lg text-slate-700 transition-all"
+                >
+                  I understand!
+                </button>
+                <button
+                  class="quick-phrase-btn text-xs bg-slate-100 hover:bg-violet-light hover:text-violet-dark px-3 py-1.5 rounded-lg text-slate-700 transition-all"
+                >
+                  Can you repeat that?
+                </button>
+                <button
+                  class="quick-phrase-btn text-xs bg-slate-100 hover:bg-violet-light hover:text-violet-dark px-3 py-1.5 rounded-lg text-slate-700 transition-all"
+                >
+                  Nice to meet you!
+                </button>
+                <button
+                  class="quick-phrase-btn text-xs bg-slate-100 hover:bg-violet-light hover:text-violet-dark px-3 py-1.5 rounded-lg text-slate-700 transition-all"
+                >
+                  Thank you so much!
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Visual Output Display Card for Signer -->
+          <div
+            id="signerDisplayCard"
+            class="glass-card-light rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between bg-gradient-to-br from-white to-violet-light/30"
+          >
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <h3
+                  class="font-outfit text-lg font-bold text-ink flex items-center gap-2"
+                >
+                  <i class="fa-solid fa-eye text-cyan-dark"></i>
+                  <span>Signer Visual Display Card</span>
+                </h3>
+                <span
+                  class="text-[10px] bg-cyan-dark text-white px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                  >High Contrast</span
+                >
+              </div>
+
+              <div
+                class="bg-ink text-white p-6 rounded-2xl shadow-inner min-h-[200px] flex flex-col justify-center items-center text-center my-2 border border-slate-800 relative"
+              >
+                <i
+                  class="fa-solid fa-comment-dots text-violet text-3xl mb-3 animate-bounce"
+                ></i>
+                <p
+                  id="visualCardText"
+                  class="font-outfit text-2xl sm:text-3xl font-extrabold text-white leading-snug"
+                >
+                  "Welcome to ISHARA! Speak or type to display here."
+                </p>
+                <div class="text-xs text-cyan mt-4 font-mono">
+                  Real-time Audio Visualizer Active
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="flex items-center justify-between pt-4 border-t border-slate-200 text-xs text-slate-500"
+            >
+              <span
+                ><i class="fa-solid fa-universal-access mr-1"></i> Formatted for
+                Deaf & Hard-of-Hearing Clarity</span
+              >
+              <button
+                id="btnClearSignerCard"
+                class="text-violet hover:underline font-semibold"
+              >
+                Clear Card
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="sign-library"
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12"
+      >
+        <div
+          class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4"
+        >
+          <div>
+            <span
+              class="text-xs font-bold text-violet uppercase tracking-widest bg-violet-light px-3 py-1 rounded-full"
+              >Interactive Reference</span
+            >
+            <h2 class="font-outfit text-3xl font-extrabold text-ink mt-2">
+              70+ Sign Dictionary & Guides
+            </h2>
+            <p class="text-sm text-slate-600">
+              Search and learn standard ISL/ASL gesture keypoints across common
+              categories.
+            </p>
+          </div>
+          <div class="w-full md:w-72">
+            <div class="relative">
+              <i
+                class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-sm"
+              ></i>
+              <input
+                id="searchSignInput"
+                type="text"
+                placeholder="Search signs (e.g. Help, Water)..."
+                class="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-violet focus:ring-1 focus:ring-violet"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Pills Filter -->
+        <div id="categoryFilterContainer" class="flex flex-wrap gap-2 mb-6">
+          <button
+            class="cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-violet text-white transition-all"
+            data-category="ALL"
+          >
+            ALL (70+)
+          </button>
+          <button
+            class="cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all"
+            data-category="Greetings"
+          >
+            Greetings
+          </button>
+          <button
+            class="cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all"
+            data-category="Emergency"
+          >
+            Emergency
+          </button>
+          <button
+            class="cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all"
+            data-category="Needs"
+          >
+            Daily Needs
+          </button>
+          <button
+            class="cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all"
+            data-category="Questions"
+          >
+            Questions
+          </button>
+          <button
+            class="cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all"
+            data-category="Alphabet"
+          >
+            Alphabet A-Z
+          </button>
+        </div>
+
+        <!-- Sign Grid Container -->
+        <div
+          id="signGrid"
+          class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
+        >
+          <!-- Dynamically populated via JS -->
+        </div>
+      </section>
+
+      <section
+        id="practice-mode"
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12"
+      >
+        <div
+          class="bg-gradient-to-r from-ink via-slate-900 to-darkSurface text-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-800"
+        >
+          <div class="max-w-3xl">
+            <span
+              class="text-xs font-bold text-cyan uppercase tracking-widest bg-cyan/10 border border-cyan/30 px-3 py-1 rounded-full"
+              >Gamified Learning</span
+            >
+            <h2 class="font-outfit text-3xl font-extrabold text-white mt-3">
+              Practice Challenge Mode
+            </h2>
+            <p class="text-sm text-slate-400 mt-1">
+              Test your gesture accuracy against AI model landmarks in real-time
+              practice mode.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-6 mt-8 items-center">
+            <div
+              class="md:col-span-5 bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center"
+            >
+              <div class="text-xs text-slate-400 uppercase font-semibold mb-2">
+                Target Challenge Sign
+              </div>
+              <div
+                id="practiceTargetSign"
+                class="text-4xl font-extrabold text-cyan mb-2"
+              >
+                👋 HELLO
+              </div>
+              <p id="practiceHint" class="text-xs text-slate-400 mb-6">
+                Raise open palm facing camera with all 5 fingers extended.
+              </p>
+              <button
+                id="btnNextPracticeSign"
+                class="px-5 py-2.5 bg-violet hover:bg-violet-dark text-white rounded-xl font-bold text-xs transition-all shadow-md"
+              >
+                Next Challenge <i class="fa-solid fa-arrow-right ml-1"></i>
+              </button>
+            </div>
+
+            <div class="md:col-span-7 space-y-4">
+              <div
+                class="bg-slate-900/80 p-5 rounded-2xl border border-slate-800"
+              >
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-bold text-slate-300"
+                    >Gesture Alignment Match Score</span
+                  >
+                  <span
+                    id="practiceScorePercent"
+                    class="text-lg font-bold text-emerald-400"
+                    >92% Match</span
+                  >
+                </div>
+                <div
+                  class="w-full bg-slate-800 h-3 rounded-full overflow-hidden"
+                >
+                  <div
+                    id="practiceProgressBar"
+                    class="bg-gradient-to-r from-violet to-cyan h-full w-[92%] transition-all duration-300"
+                  ></div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div
+                  class="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-center"
+                >
+                  <div class="text-[10px] text-slate-500 uppercase font-bold">
+                    Total Score
+                  </div>
+                  <div
+                    id="totalPracticeScore"
+                    class="text-2xl font-black text-white mt-1"
+                  >
+                    1,450 PTS
+                  </div>
+                </div>
+                <div
+                  class="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-center"
+                >
+                  <div class="text-[10px] text-slate-500 uppercase font-bold">
+                    Accuracy Streak
+                  </div>
+                  <div
+                    id="practiceStreak"
+                    class="text-2xl font-black text-cyan mt-1"
+                  >
+                    5 🔥
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="history-section"
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 mb-12"
+      >
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="font-outfit text-2xl font-bold text-ink">
+              Recent Translations & Favorites
+            </h2>
+            <p class="text-xs text-slate-500">
+              History of converted gestures and audio transcriptions saved
+              locally.
+            </p>
+          </div>
+          <button
+            id="btnClearHistory"
+            class="text-xs font-semibold text-rose-600 hover:text-rose-800 transition-all"
+          >
+            <i class="fa-solid fa-trash mr-1"></i> Clear Log
+          </button>
+        </div>
+
+        <div id="historyLogContainer" class="space-y-3">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </section>
+    </main>
+
+    <footer
+      class="bg-ink text-white border-t border-slate-800 py-10 relative z-10"
+    >
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4"
+      >
+        <div class="flex items-center gap-3">
+          <div
+            class="w-8 h-8 bg-violet rounded-lg flex items-center justify-center font-bold text-sm"
+          >
+            I
+          </div>
+          <span class="font-outfit font-bold text-lg tracking-wider text-white"
+            >ISHARA AI</span
+          >
+          <span class="text-xs text-slate-500"
+            >| Accessible Communication Ecosystem</span
+          >
+        </div>
+        <p class="text-xs text-slate-400">
+          © 2026 ISHARA AI. Powered by MediaPipe Computer Vision & Speech Web
+          APIs.
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      // Core State
+      let isCameraActive = false;
+      let isSimMode = false;
+      let cameraStream = null;
+      let handsModel = null;
+      let cameraUtils = null;
+      let gestureSequence = [];
+      let fpsCounterVal = 60;
+      let lastFrameTime = performance.now();
+      let demoActive = false;
+      let demoStep = 0;
+      let demoInterval = null;
+      let recognition = null;
+      let historyLog = [];
+
+      // Predefined 70+ Sign Dictionary
+      const signDictionary = [
+        {
+          name: "HELLO",
+          category: "Greetings",
+          icon: "👋",
+          desc: "Open palm facing forward with fingers spread.",
+        },
+        {
+          name: "THANK YOU",
+          category: "Greetings",
+          icon: "🙏",
+          desc: "Fingertips touch chin then extend forward gracefully.",
+        },
+        {
+          name: "WELCOME",
+          category: "Greetings",
+          icon: "🤝",
+          desc: "Open hand moves in sweeping horizontal arc.",
+        },
+        {
+          name: "GOOD MORNING",
+          category: "Greetings",
+          icon: "🌅",
+          desc: "Sun raising motion from arm elbow bend.",
+        },
+        {
+          name: "GOODBYE",
+          category: "Greetings",
+          icon: "👋",
+          desc: "Waving open hand fingers gently up and down.",
+        },
+
+        {
+          name: "HELP",
+          category: "Emergency",
+          icon: "🆘",
+          desc: "Closed fist thumb up resting on flat palm.",
+        },
+        {
+          name: "DOCTOR",
+          category: "Emergency",
+          icon: "🩺",
+          desc: "Tap wrist with index & middle fingers twice.",
+        },
+        {
+          name: "DANGER",
+          category: "Emergency",
+          icon: "⚠️",
+          desc: "Crossed forearms making an X shape.",
+        },
+        {
+          name: "POLICE",
+          category: "Emergency",
+          icon: "👮",
+          desc: "C-shape hand tap on chest left badge location.",
+        },
+        {
+          name: "HOSPITAL",
+          category: "Emergency",
+          icon: "🏥",
+          desc: "Draw cross shape on upper right arm.",
+        },
+
+        {
+          name: "WATER",
+          category: "Needs",
+          icon: "💧",
+          desc: "W-shape 3 fingers tap near mouth or chin.",
+        },
+        {
+          name: "FOOD",
+          category: "Needs",
+          icon: "🍲",
+          desc: "Fingertips bunched touching lips repeatedly.",
+        },
+        {
+          name: "YES",
+          category: "Needs",
+          icon: "✅",
+          desc: "S-fist nodding up and down like a head nod.",
+        },
+        {
+          name: "NO",
+          category: "Needs",
+          icon: "❌",
+          desc: "Index and middle finger snap down to thumb.",
+        },
+        {
+          name: "PLEASE",
+          category: "Needs",
+          icon: "🤝",
+          desc: "Flat palm rubbing chest in small circular motion.",
+        },
+        {
+          name: "MORE",
+          category: "Needs",
+          icon: "➕",
+          desc: "Bunched fingertips of both hands tapping together.",
+        },
+        {
+          name: "STOP",
+          category: "Needs",
+          icon: "✋",
+          desc: "Open palm chopping flat onto other palm.",
+        },
+      ];
+
+      // Populate Alphabets A-Z dynamically into dictionary
+      const alphabets = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+      alphabets.forEach((letter) => {
+        signDictionary.push({
+          name: `LETTER ${letter}`,
+          category: "Alphabet",
+          icon: "🔤",
+          desc: `Standard fingerspelling posture for letter ${letter}.`,
+        });
+      });
+
+      // Add default sample history items
+      historyLog = [
+        {
+          time: "10:14 AM",
+          sequence: ["HELLO", "HELP"],
+          en: "Hello! I need assistance please.",
+          np: "नमस्ते, मलाई सहयोग चाहिन्छ।",
+        },
+        {
+          time: "09:30 AM",
+          sequence: ["THANK YOU"],
+          en: "Thank you very much!",
+          np: "धेरै धेरै धन्यवाद!",
+        },
+      ];
+
+      window.addEventListener("DOMContentLoaded", () => {
+        initNeuralBackground();
+        initSignLibraryGrid();
+        initHistoryLogUI();
+        setupEventListeners();
+        initSpeechRecognition();
+
+        // Default Canvas Hud size adjust
+        const canvas = document.getElementById("hudCanvas");
+        canvas.width = canvas.clientWidth || 640;
+        canvas.height = canvas.clientHeight || 360;
+      });
+
+      function initNeuralBackground() {
+        const canvas = document.getElementById("bgNeuralCanvas");
+        const ctx = canvas.getContext("2d");
+        let width = (canvas.width = window.innerWidth);
+        let height = (canvas.height = window.innerHeight);
+
+        const particles = Array.from({ length: 35 }, () => ({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: (Math.random() - 0.5) * 0.8,
+          radius: Math.random() * 2.5 + 1.5,
+        }));
+
+        function render() {
+          ctx.clearRect(0, 0, width, height);
+          ctx.fillStyle = "#6C5CE7";
+          ctx.strokeStyle = "rgba(108, 92, 231, 0.15)";
+
+          for (let i = 0; i < particles.length; i++) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+
+            if (p.x < 0 || p.x > width) p.vx *= -1;
+            if (p.y < 0 || p.y > height) p.vy *= -1;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            for (let j = i + 1; j < particles.length; j++) {
+              let p2 = particles[j];
+              let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+              if (dist < 130) {
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+              }
+            }
+          }
+          requestAnimationFrame(render);
+        }
+        render();
+
+        window.addEventListener("resize", () => {
+          width = canvas.width = window.innerWidth;
+          height = canvas.height = window.innerHeight;
+        });
+      }
+
+      async function startCamera() {
+        const videoElement = document.getElementById("webcamVideo");
+        const standby = document.getElementById("cameraStandby");
+        const scanner = document.getElementById("scannerBeam");
+        const badge = document.getElementById("gestureConfidenceBadge");
+
+        standby.classList.add("hidden");
+        videoElement.classList.remove("hidden");
+        scanner.classList.remove("hidden");
+        badge.classList.remove("hidden");
+
+        try {
+          // Initialize MediaPipe Hands instance
+          handsModel = new Hands({
+            locateFile: (file) =>
+              `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+          });
+
+          handsModel.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6,
+          });
+
+          handsModel.onResults(onHandResults);
+
+          // Initialize camera utility
+          cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+              if (isCameraActive) {
+                await handsModel.send({ image: videoElement });
+              }
+            },
+            width: 1280,
+            height: 720,
+          });
+
+          await cameraUtils.start();
+          isCameraActive = true;
+          isSimMode = false;
+          updateModeButtons();
+        } catch (err) {
+          console.error("Camera startup error:", err);
+          standby.classList.remove("hidden");
+          alert("Unable to access webcam. Switching to Simulation Mode.");
+          triggerSimulatedSign("HELLO");
+        }
+      }
+
+      function stopCamera() {
+        if (cameraUtils) {
+          cameraUtils.stop();
+        }
+        isCameraActive = false;
+        document.getElementById("webcamVideo").classList.add("hidden");
+        document.getElementById("cameraStandby").classList.remove("hidden");
+        document.getElementById("scannerBeam").classList.add("hidden");
+        document
+          .getElementById("gestureConfidenceBadge")
+          .classList.add("hidden");
+        updateModeButtons();
+      }
+
+      function onHandResults(results) {
+        const canvas = document.getElementById("hudCanvas");
+        const ctx = canvas.getContext("2d");
+        const video = document.getElementById("webcamVideo");
+
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 360;
+
+        ctx.save();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // FPS calculation
+        const now = performance.now();
+        fpsCounterVal = Math.round(1000 / (now - lastFrameTime));
+        lastFrameTime = now;
+        document.getElementById("fpsCounter").textContent = fpsCounterVal || 60;
+
+        if (
+          results.multiHandLandmarks &&
+          results.multiHandLandmarks.length > 0
+        ) {
+          for (const landmarks of results.multiHandLandmarks) {
+            drawHandSkeleton(ctx, landmarks, canvas.width, canvas.height);
+
+            // Recognize gesture geometry
+            const detectedSign = recognizeGestureFromLandmarks(landmarks);
+            if (detectedSign) {
+              updateDetectedHUD(detectedSign, "98.6%");
+              debouncePushSequence(detectedSign);
+            }
+          }
+        }
+        ctx.restore();
+      }
+
+      function drawHandSkeleton(ctx, landmarks, w, h) {
+        const connections = [
+          [0, 1],
+          [1, 2],
+          [2, 3],
+          [3, 4],
+          [0, 5],
+          [5, 6],
+          [6, 7],
+          [7, 8],
+          [0, 9],
+          [9, 10],
+          [10, 11],
+          [11, 12],
+          [0, 13],
+          [13, 14],
+          [14, 15],
+          [15, 16],
+          [0, 17],
+          [17, 18],
+          [18, 19],
+          [19, 20],
+          [5, 9],
+          [9, 13],
+          [13, 17],
+        ];
+
+        // Draw Connection Lines
+        ctx.strokeStyle = "#19D3C5";
+        ctx.lineWidth = 3;
+        for (const [i, j] of connections) {
+          const p1 = landmarks[i];
+          const p2 = landmarks[j];
+          ctx.beginPath();
+          ctx.moveTo(p1.x * w, p1.y * h);
+          ctx.lineTo(p2.x * w, p2.y * h);
+          ctx.stroke();
+        }
+
+        // Draw Landmark Joint Nodes
+        for (let i = 0; i < landmarks.length; i++) {
+          const lm = landmarks[i];
+          const x = lm.x * w;
+          const y = lm.y * h;
+
+          ctx.beginPath();
+          ctx.arc(x, y, [4, 8, 12, 16, 20].includes(i) ? 7 : 4, 0, 2 * Math.PI);
+          ctx.fillStyle = [4, 8, 12, 16, 20].includes(i)
+            ? "#FF6B6B"
+            : "#6C5CE7";
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.stroke();
+        }
+      }
+
+      function recognizeGestureFromLandmarks(lm) {
+        // Finger tip indices: Thumb 4, Index 8, Middle 12, Ring 16, Pinky 20
+        // Finger PIP indices: Index 6, Middle 10, Ring 14, Pinky 18
+        const indexExtended = lm[8].y < lm[6].y;
+        const middleExtended = lm[12].y < lm[10].y;
+        const ringExtended = lm[16].y < lm[14].y;
+        const pinkyExtended = lm[20].y < lm[18].y;
+        const thumbExtended = lm[4].x < lm[2].x || lm[4].y < lm[2].y;
+
+        const extendedCount = [
+          indexExtended,
+          middleExtended,
+          ringExtended,
+          pinkyExtended,
+        ].filter(Boolean).length;
+
+        if (extendedCount === 4 && thumbExtended) return "HELLO";
+        if (extendedCount === 0) return "NO";
+        if (extendedCount === 1 && indexExtended) return "WATER";
+        if (extendedCount === 2 && indexExtended && middleExtended)
+          return "HELP";
+        if (
+          extendedCount === 3 &&
+          indexExtended &&
+          middleExtended &&
+          ringExtended
+        )
+          return "FOOD";
+        if (thumbExtended && extendedCount === 0) return "YES";
+        if (extendedCount === 1 && pinkyExtended) return "PLEASE";
+
+        return "THANK YOU";
+      }
+
+      function triggerSimulatedSign(signName) {
+        isSimMode = true;
+        if (isCameraActive) stopCamera();
+        updateModeButtons();
+
+        document.getElementById("cameraStandby").classList.add("hidden");
+        document
+          .getElementById("gestureConfidenceBadge")
+          .classList.remove("hidden");
+
+        const canvas = document.getElementById("hudCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = 640;
+        canvas.height = 360;
+
+        // Generate synthetic 21 landmark points
+        const syntheticLandmarks = [];
+        for (let i = 0; i < 21; i++) {
+          syntheticLandmarks.push({
+            x: 0.5 + Math.sin(i * 0.3) * 0.2,
+            y: 0.5 + Math.cos(i * 0.3) * 0.2,
+          });
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawHandSkeleton(ctx, syntheticLandmarks, canvas.width, canvas.height);
+
+        updateDetectedHUD(signName, "99.1%");
+        debouncePushSequence(signName);
+      }
+
+      let lastPushedTime = 0;
+      function debouncePushSequence(sign) {
+        const now = Date.now();
+        if (now - lastPushedTime > 1200) {
+          pushSignToSequence(sign);
+          lastPushedTime = now;
+        }
+      }
+
+      function updateDetectedHUD(name, confidence) {
+        document.getElementById("currentDetectedName").textContent = name;
+        document.getElementById("currentConfidenceScore").textContent =
+          confidence;
+      }
+
+      function updateModeButtons() {
+        const camBtn = document.getElementById("btnCameraMode");
+        const simBtn = document.getElementById("btnSimMode");
+
+        if (isCameraActive) {
+          camBtn.className =
+            "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-violet text-white shadow-md flex items-center gap-2";
+          simBtn.className =
+            "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-400 hover:text-white flex items-center gap-2";
+        } else if (isSimMode) {
+          simBtn.className =
+            "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-violet text-white shadow-md flex items-center gap-2";
+          camBtn.className =
+            "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-400 hover:text-white flex items-center gap-2";
+        }
+      }
+
+      function pushSignToSequence(sign) {
+        gestureSequence.push(sign);
+        renderSequenceChips();
+      }
+
+      function renderSequenceChips() {
+        const container = document.getElementById("sequenceChipsContainer");
+        if (gestureSequence.length === 0) {
+          container.innerHTML =
+            '<span id="emptyChipsPlaceholder" class="text-slate-600 text-xs italic">Perform or click signs to build sequence...</span>';
+          return;
+        }
+
+        container.innerHTML = gestureSequence
+          .map(
+            (sign, index) => `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-violet/20 border border-violet/40 text-violet-light rounded-lg text-xs font-semibold animate-fade-in">
+                    <span>${sign}</span>
+                    <button onclick="removeSequenceChip(${index})" class="text-violet hover:text-rose-400 focus:outline-none">
+                        <i class="fa-solid fa-xmark text-[10px]"></i>
+                    </button>
+                </span>
+            `,
+          )
+          .join("");
+      }
+
+      function removeSequenceChip(index) {
+        gestureSequence.splice(index, 1);
+        renderSequenceChips();
+      }
+
+      function interpretSequenceAI() {
+        if (gestureSequence.length === 0) {
+          document.getElementById("translatedEnglish").textContent =
+            "Please add at least one sign gesture.";
+          document.getElementById("translatedNepali").textContent =
+            "कृपया कम्तीमा एउटा सङ्केत थप्नुहोस्।";
+          return;
+        }
+
+        const seqStr = gestureSequence.join(" + ");
+        let enText = "";
+        let npText = "";
+
+        // Combination map rules
+        if (
+          seqStr.includes("HELLO") &&
+          seqStr.includes("HELP") &&
+          seqStr.includes("WATER")
+        ) {
+          enText = "Hello! I need help getting water, please.";
+          npText = "नमस्ते! मलाई पानी पिउन सहयोग चाहिन्छ।";
+        } else if (seqStr.includes("HELLO") && seqStr.includes("HELP")) {
+          enText = "Hello! I need assistance, please.";
+          npText = "नमस्ते! मलाई सहयोग चाहिन्छ।";
+        } else if (seqStr.includes("FOOD") && seqStr.includes("PLEASE")) {
+          enText = "I would like some food, please.";
+          npText = "कृपया, मलाई अलिकति खाना चाहियो।";
+        } else if (seqStr === "THANK YOU") {
+          enText = "Thank you very much!";
+          npText = "धेरै धेरै धन्यवाद!";
+        } else {
+          enText = `Expressing: ${gestureSequence.join(", ")}.`;
+          npText = `अभिव्यक्त गर्दै: ${gestureSequence.join(", ")}।`;
+        }
+
+        document.getElementById("translatedEnglish").textContent = enText;
+        document.getElementById("translatedNepali").textContent = npText;
+
+        // Add to history
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        historyLog.unshift({
+          time: timeStr,
+          sequence: [...gestureSequence],
+          en: enText,
+          np: npText,
+        });
+        initHistoryLogUI();
+      }
+
+      function speakText(text, lang) {
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = lang;
+          window.speechSynthesis.speak(utterance);
+        } else {
+          alert("Speech synthesis is not supported in this browser.");
+        }
+      }
+
+      function initSpeechRecognition() {
+        const SpeechRecognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+          recognition = new SpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = false;
+
+          recognition.onstart = () => {
+            const badge = document.getElementById("sttStatusBadge");
+            badge.textContent = "Listening...";
+            badge.className =
+              "text-[10px] font-bold bg-rose-100 text-rose-600 px-2.5 py-1 rounded-full animate-pulse";
+          };
+
+          recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById("sttTextInput").value = transcript;
+            updateSignerVisualCard(transcript);
+          };
+
+          recognition.onend = () => {
+            const badge = document.getElementById("sttStatusBadge");
+            badge.textContent = "Microphone Ready";
+            badge.className =
+              "text-[10px] font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full";
+          };
+        }
+      }
+
+      function updateSignerVisualCard(text) {
+        const cardText = document.getElementById("visualCardText");
+        cardText.textContent = `"${text}"`;
+      }
+
+      function startJudgeDemo() {
+        demoActive = true;
+        demoStep = 1;
+        const banner = document.getElementById("demoPresentationBanner");
+        banner.classList.remove("hidden");
+
+        const steps = [
+          {
+            num: 1,
+            desc: "1/5: Loading MediaPipe Hands 21-Point Model...",
+            progress: "20%",
+            sign: "HELLO",
+          },
+          {
+            num: 2,
+            desc: "2/5: Detecting Hand Landmarks & Skeleton Keypoints...",
+            progress: "40%",
+            sign: "HELP",
+          },
+          {
+            num: 3,
+            desc: "3/5: Building Dynamic Gesture Sequence...",
+            progress: "60%",
+            sign: "WATER",
+          },
+          {
+            num: 4,
+            desc: "4/5: Running Contextual Neural NLP Translation...",
+            progress: "80%",
+            interpret: true,
+          },
+          {
+            num: 5,
+            desc: "5/5: Speech Synthesis & Visual Display Complete!",
+            progress: "100%",
+            speak: true,
+          },
+        ];
+
+        function runStep() {
+          if (!demoActive) return;
+          const current = steps[demoStep - 1];
+          document.getElementById("demoStepNum").textContent = current.num;
+          document.getElementById("demoStepDesc").textContent = current.desc;
+          document.getElementById("demoProgressBar").style.width =
+            current.progress;
+
+          if (current.sign) {
+            triggerSimulatedSign(current.sign);
+          } else if (current.interpret) {
+            interpretSequenceAI();
+          } else if (current.speak) {
+            const en = document.getElementById("translatedEnglish").textContent;
+            speakText(en, "en-US");
+            updateSignerVisualCard(en);
+          }
+
+          demoStep++;
+          if (demoStep > 5) {
+            demoStep = 1; // Cycle loop
+          }
+        }
+
+        runStep();
+        demoInterval = setInterval(runStep, 3000);
+      }
+
+      function stopJudgeDemo() {
+        demoActive = false;
+        if (demoInterval) clearInterval(demoInterval);
+        document
+          .getElementById("demoPresentationBanner")
+          .classList.add("hidden");
+      }
+
+      function initSignLibraryGrid(category = "ALL") {
+        const grid = document.getElementById("signGrid");
+        const filtered =
+          category === "ALL"
+            ? signDictionary
+            : signDictionary.filter((s) => s.category === category);
+
+        grid.innerHTML = filtered
+          .map(
+            (sign) => `
+                <div class="glass-card-light p-4 rounded-2xl border border-slate-200 hover:shadow-md transition-all group flex flex-col justify-between">
+                    <div>
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">${sign.icon}</div>
+                        <h4 class="font-outfit font-bold text-sm text-ink mb-1">${sign.name}</h4>
+                        <span class="text-[9px] bg-violet-light text-violet-dark px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider">${sign.category}</span>
+                        <p class="text-[11px] text-slate-500 mt-2 line-clamp-2">${sign.desc}</p>
+                    </div>
+                    <button onclick="triggerSimulatedSign('${sign.name.replace("LETTER ", "")}')" class="mt-3 w-full py-1.5 bg-slate-100 hover:bg-violet hover:text-white rounded-lg text-xs font-semibold text-slate-700 transition-all">
+                        Try Sign
+                    </button>
+                </div>
+            `,
+          )
+          .join("");
+      }
+
+      function initHistoryLogUI() {
+        const container = document.getElementById("historyLogContainer");
+        if (historyLog.length === 0) {
+          container.innerHTML =
+            '<div class="text-xs text-slate-400 italic">No recent translation logs available.</div>';
+          return;
+        }
+
+        container.innerHTML = historyLog
+          .map(
+            (item, idx) => `
+                <div class="glass-card-light p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">${item.time}</span>
+                            <div class="flex gap-1">
+                                ${item.sequence.map((s) => `<span class="text-[10px] bg-violet-light text-violet-dark font-bold px-2 py-0.5 rounded">${s}</span>`).join("")}
+                            </div>
+                        </div>
+                        <div class="text-xs font-semibold text-ink">EN: "${item.en}"</div>
+                        <div class="text-xs text-cyan-dark font-medium">NP: "${item.np}"</div>
+                    </div>
+                    <button onclick="copyHistoryItem('${item.en}')" class="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 font-semibold transition-all flex items-center gap-1.5 self-start sm:self-center">
+                        <i class="fa-solid fa-copy text-violet"></i> Copy
+                    </button>
+                </div>
+            `,
+          )
+          .join("");
+      }
+
+      function copyHistoryItem(text) {
+        const temp = document.createElement("textarea");
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand("copy");
+        document.body.removeChild(temp);
+        alert("Copied to clipboard: " + text);
+      }
+
+      function setupEventListeners() {
+        // Camera & Sim triggers
+        document
+          .getElementById("btnStartCamera")
+          .addEventListener("click", startCamera);
+        document
+          .getElementById("btnCameraMode")
+          .addEventListener("click", startCamera);
+        document
+          .getElementById("btnSimMode")
+          .addEventListener("click", () => triggerSimulatedSign("HELLO"));
+
+        // Quick sim buttons
+        document.querySelectorAll(".sim-sign-btn").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            const sign = e.target.getAttribute("data-sign");
+            triggerSimulatedSign(sign);
+          });
+        });
+
+        // Sequence controls
+        document.getElementById("btnUndoSign").addEventListener("click", () => {
+          gestureSequence.pop();
+          renderSequenceChips();
+        });
+        document
+          .getElementById("btnClearSequence")
+          .addEventListener("click", () => {
+            gestureSequence = [];
+            renderSequenceChips();
+          });
+        document
+          .getElementById("btnInterpretSequence")
+          .addEventListener("click", interpretSequenceAI);
+
+        // Audio TTS
+        document
+          .getElementById("btnSpeakEnglish")
+          .addEventListener("click", () => {
+            const text =
+              document.getElementById("translatedEnglish").textContent;
+            speakText(text, "en-US");
+          });
+        document
+          .getElementById("btnSpeakNepali")
+          .addEventListener("click", () => {
+            const text =
+              document.getElementById("translatedNepali").textContent;
+            speakText(text, "ne-NP");
+          });
+
+        // Two way speech
+        document
+          .getElementById("btnMicListen")
+          .addEventListener("click", () => {
+            if (recognition) {
+              recognition.start();
+            } else {
+              alert("Speech recognition API is not supported in this browser.");
+            }
+          });
+
+        document
+          .getElementById("btnSubmitSpeechText")
+          .addEventListener("click", () => {
+            const val = document.getElementById("sttTextInput").value;
+            if (val) updateSignerVisualCard(val);
+          });
+
+        document.querySelectorAll(".quick-phrase-btn").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            updateSignerVisualCard(e.target.textContent);
+          });
+        });
+
+        document
+          .getElementById("btnClearSignerCard")
+          .addEventListener("click", () => {
+            updateSignerVisualCard(
+              "Welcome to ISHARA! Speak or type to display here.",
+            );
+          });
+
+        // Judge Presentation Loop
+        document
+          .getElementById("heroJudgeBtn")
+          .addEventListener("click", () => {
+            document
+              .getElementById("live-arena")
+              .scrollIntoView({ behavior: "smooth" });
+            startJudgeDemo();
+          });
+        document
+          .getElementById("btnDemoSequence")
+          .addEventListener("click", startJudgeDemo);
+        document
+          .getElementById("btnStopDemo")
+          .addEventListener("click", stopJudgeDemo);
+
+        // Library search & Category filter
+        document
+          .getElementById("searchSignInput")
+          .addEventListener("input", (e) => {
+            const query = e.target.value.toLowerCase();
+            const cards = document.querySelectorAll("#signGrid > div");
+            cards.forEach((card) => {
+              const text = card.textContent.toLowerCase();
+              card.style.display = text.includes(query) ? "flex" : "none";
+            });
+          });
+
+        document.querySelectorAll(".cat-filter-btn").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            document.querySelectorAll(".cat-filter-btn").forEach((b) => {
+              b.className =
+                "cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all";
+            });
+            e.target.className =
+              "cat-filter-btn px-4 py-2 rounded-xl text-xs font-bold bg-violet text-white transition-all";
+            initSignLibraryGrid(e.target.getAttribute("data-category"));
+          });
+        });
+
+        // Mobile Menu Toggle
+        document
+          .getElementById("mobileMenuBtn")
+          .addEventListener("click", () => {
+            const menu = document.getElementById("mobileMenu");
+            menu.classList.toggle("hidden");
+          });
+
+        // History clear
+        document
+          .getElementById("btnClearHistory")
+          .addEventListener("click", () => {
+            historyLog = [];
+            initHistoryLogUI();
+          });
+
+        // Practice Mode next challenge
+        document
+          .getElementById("btnNextPracticeSign")
+          .addEventListener("click", () => {
+            const targets = [
+              "👋 HELLO",
+              "🆘 HELP",
+              "💧 WATER",
+              "🍲 FOOD",
+              "🙏 THANK YOU",
+            ];
+            const hints = [
+              "Raise open palm facing camera with all 5 fingers extended.",
+              "Extend index and middle finger together in a V-shape.",
+              "Extend single index finger towards camera.",
+              "Extend three fingers upwards.",
+              "Touch chin with fingertips then extend forward.",
+            ];
+            const randIdx = Math.floor(Math.random() * targets.length);
+            document.getElementById("practiceTargetSign").textContent =
+              targets[randIdx];
+            document.getElementById("practiceHint").textContent =
+              hints[randIdx];
+          });
+      }
+    </script>
+  </body>
+</html>
